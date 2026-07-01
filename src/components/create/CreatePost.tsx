@@ -10,7 +10,7 @@ interface CreatePostProps {
   onCreated?: () => void;
 }
 
-type Step = 'select' | 'preview' | 'caption';
+type Step = 'select' | 'edit';
 
 export default function CreatePost({ isOpen, onClose, onCreated }: CreatePostProps) {
   const [step, setStep] = useState<Step>('select');
@@ -35,11 +35,15 @@ export default function CreatePost({ isOpen, onClose, onCreated }: CreatePostPro
   const handleClose = () => { reset(); onClose(); };
 
   const processFiles = (selected: File[]) => {
-    const valid = selected.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/')).slice(0, 10);
+    const valid = selected.filter(f =>
+      f.type.startsWith('image/') ||
+      f.type.startsWith('video/') ||
+      /\.(jpg|jpeg|png|gif|webp|bmp|mp4|mov|webm|avi|mkv)$/i.test(f.name)
+    ).slice(0, 10);
     if (!valid.length) return;
     setFiles(valid);
     setPreviews(valid.map(f => URL.createObjectURL(f)));
-    setStep('preview');
+    setStep('edit');
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,10 +74,12 @@ export default function CreatePost({ isOpen, onClose, onCreated }: CreatePostPro
     }
   };
 
-  const title = step === 'select' ? 'Create new post' : step === 'preview' ? 'Crop' : 'Create new post';
+  const isVideo = (idx: number) =>
+    files[idx]?.type.startsWith('video/') ||
+    /\.(mp4|mov|webm|avi|mkv)$/i.test(files[idx]?.name ?? '');
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} maxWidth="max-w-2xl" title={title}>
+    <Modal isOpen={isOpen} onClose={handleClose} maxWidth="max-w-2xl" title={step === 'select' ? 'Create new post' : 'New post'}>
       {step === 'select' && (
         <div
           className={`flex flex-col items-center justify-center py-20 px-8 transition-colors ${dragging ? 'bg-blue-900/20' : ''}`}
@@ -88,7 +94,7 @@ export default function CreatePost({ isOpen, onClose, onCreated }: CreatePostPro
           <p className="text-white text-2xl font-light mb-8">Drag photos and videos here</p>
           <button
             onClick={() => fileRef.current?.click()}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#5548b8')}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#1877f2')}
             onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#0095f6')}
             style={{ backgroundColor: '#0095f6', color: '#fff', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: 14, border: 'none', cursor: 'pointer' }}
           >
@@ -105,26 +111,31 @@ export default function CreatePost({ isOpen, onClose, onCreated }: CreatePostPro
         </div>
       )}
 
-      {step === 'preview' && (
+      {step === 'edit' && (
         <div>
-          {/* Preview header actions */}
+          {/* Header: back + Share button */}
           <div className="flex justify-between items-center px-4 py-2 border-b border-neutral-800">
-            <button onClick={() => { setStep('select'); setFiles([]); setPreviews([]); }} className="text-white">
+            <button
+              onClick={() => { setStep('select'); setFiles([]); setPreviews([]); }}
+              className="text-white"
+            >
               <ChevronLeft size={20} />
             </button>
             <button
-              onClick={() => setStep('caption')}
-              className="text-blue-400 font-semibold text-sm"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="text-blue-400 font-semibold text-sm disabled:opacity-40 flex items-center gap-2"
             >
-              Next
+              {loading ? <Spinner size="sm" /> : 'Share'}
             </button>
           </div>
 
-          <div className="relative bg-black" style={{ aspectRatio: '1' }}>
-            {files[previewIdx]?.type.startsWith('video/') ? (
-              <video src={previews[previewIdx]} className="w-full h-full object-cover" controls />
+          {/* Image/video preview */}
+          <div className="relative bg-black" style={{ maxHeight: 340, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {isVideo(previewIdx) ? (
+              <video src={previews[previewIdx]} style={{ width: '100%', maxHeight: 340, objectFit: 'contain' }} controls />
             ) : (
-              <img src={previews[previewIdx]} alt="preview" className="w-full h-full object-cover" />
+              <img src={previews[previewIdx]} alt="preview" style={{ width: '100%', maxHeight: 340, objectFit: 'contain' }} />
             )}
 
             {previews.length > 1 && (
@@ -157,43 +168,22 @@ export default function CreatePost({ isOpen, onClose, onCreated }: CreatePostPro
               </>
             )}
           </div>
-        </div>
-      )}
 
-      {step === 'caption' && (
-        <div>
-          <div className="flex justify-between items-center px-4 py-2 border-b border-neutral-800">
-            <button onClick={() => setStep('preview')} className="text-white">
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="text-blue-400 font-semibold text-sm disabled:opacity-40 flex items-center gap-2"
-            >
-              {loading ? <Spinner size="sm" /> : 'Share'}
-            </button>
-          </div>
-
-          <div className="flex gap-4 p-4 border-b border-neutral-800">
-            <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-              {files[0]?.type.startsWith('video/') ? (
-                <video src={previews[0]} className="w-full h-full object-cover" />
-              ) : (
-                <img src={previews[0]} alt="preview" className="w-full h-full object-cover" />
-              )}
-            </div>
+          {/* Caption */}
+          <div className="p-4 border-b border-neutral-800">
             <textarea
               value={caption}
               onChange={e => setCaption(e.target.value)}
               placeholder="Write a caption..."
               maxLength={2200}
-              rows={5}
-              className="flex-1 bg-transparent text-white text-sm placeholder-neutral-600 focus:outline-none resize-none"
+              rows={4}
+              className="w-full bg-transparent text-white text-sm placeholder-neutral-600 focus:outline-none resize-none"
             />
+            <p className="text-neutral-500 text-xs text-right">{caption.length}/2,200</p>
           </div>
 
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-800">
+          {/* Location */}
+          <div className="flex items-center gap-3 px-4 py-3">
             <MapPin size={18} className="text-neutral-400" />
             <input
               value={location}
@@ -201,10 +191,6 @@ export default function CreatePost({ isOpen, onClose, onCreated }: CreatePostPro
               placeholder="Add location"
               className="flex-1 bg-transparent text-white text-sm placeholder-neutral-500 focus:outline-none"
             />
-          </div>
-
-          <div className="px-4 py-2">
-            <p className="text-neutral-500 text-xs text-right">{caption.length}/2,200</p>
           </div>
         </div>
       )}

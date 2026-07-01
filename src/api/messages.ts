@@ -48,15 +48,7 @@ export const getMessages = (conversationId: string, page = 1): Promise<Message[]
     return arr.map(normalizeMsg);
   });
 
-export const sendMessage = (conversationId: string, data: FormData): Promise<Message> => {
-  const hasMedia = data.has('media');
-  if (!hasMedia) {
-    // text-only → JSON
-    return api.post<any>(`/messages/${conversationId}`, {
-      content: data.get('content') ?? '',
-    }).then(r => normalizeMsg(r.data));
-  }
-  return api.post<any>(`/messages/${conversationId}`, data, {
+export const sendMessage = (conversationId: string, data: FormData): Promise<Message> =>
+  api.post<any>(`/messages/${conversationId}`, data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(r => normalizeMsg(r.data));
-};
